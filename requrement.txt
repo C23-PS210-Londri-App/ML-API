@@ -1,0 +1,8 @@
+Flask
+tensorflow
+numpy
+google-cloud-storage
+gunicorn
+Werkzeug
+scikit-learn
+mysql.connector
