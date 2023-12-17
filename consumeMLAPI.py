@@ -1,9 +1,9 @@
 from flask import Flask, request, jsonify
-from keras.models import load_model
 import numpy as np
 import pickle
 import mysql.connector
 from google.cloud import storage
+import tensorflow as tf
 
 app = Flask(__name__)
 # Download the MinMaxScaler from the new Google Cloud Storage bucket
@@ -20,13 +20,13 @@ def download_minmax_scaler():
 # Download the trained model from the new Google Cloud Storage bucket
 def download_model():
     bucket_name = 'model_londri'
-    blob_name = 'model_rev_final.h5'
+    blob_name = 'model_rev_final.tflite'
 
     client = storage.Client()
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(blob_name)
 
-    blob.download_to_filename('model_rev_final.h5')
+    blob.download_to_filename('model_rev_final.tflite')
 
 # Load the MinMaxScaler from pickle file
 def load_minmax_scaler():
@@ -37,11 +37,11 @@ def load_minmax_scaler():
 # Load the trained model
 def load_trained_model():
     download_model()
-    from keras.models import load_model
-    return load_model('model_rev_final.h5', compile=False)
+    return tf.lite.Interpreter(model_path='model_rev_final.tflite')
 
 minmax_scaler = load_minmax_scaler()
 savedModel = load_trained_model()
+savedModel.allocate_tensors()
 
 # MySQL database connection configuration
 db_host = '34.101.116.210'
@@ -113,11 +113,14 @@ def proses_input():
 
         # If you want to use the machine learning model (example recommendation)
         new_data_point = new_data_point.reshape(1, -1)
+        
+        savedModel.set_tensor(savedModel.get_input_details()[0]['index'], new_data_point)
+        savedModel.invoke()
 
-        recommendation_score = savedModel.predict(new_data_point)
+        recommendation_score = savedModel.get_tensor(savedModel.get_output_details()[0]['index'])
         class_probabilities = recommendation_score[0]
         sorted_indices = np.argsort(class_probabilities)[::-1]
-        next_most_likely_indices = sorted_indices[1:16]
+        next_most_likely_indices = sorted_indices[1:6]
 
         # Fetch data from MySQL based on the next most likely indices
         cursor = db_connection.cursor()
