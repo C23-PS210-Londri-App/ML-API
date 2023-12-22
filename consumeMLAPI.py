@@ -165,6 +165,51 @@ def proses_input():
         print("Error:", str(e))
         return jsonify({'error': str(e)})
 
+# New endpoint for choosing the nearest laundry based on latitude and longitude
+@app.route('/laundry_terdekat', methods=['POST'])
+def laundry_terdekat():
+    try:
+        input_json = request.get_json()
+
+        # Extract latitude and longitude from JSON
+        latitude = float(input_json.get('latitude'))
+        longitude = float(input_json.get('longitude'))
+
+        # Fetch 5 nearby laundries based on Haversine distance
+        cursor = db_connection.cursor()
+        nearby_query = """
+            SELECT id, name, latitude, longitude,
+                6371 * 2 * ASIN(SQRT(POWER(SIN((RADIANS(latitude) - RADIANS(%s)) / 2), 2) +
+                COS(RADIANS(%s)) * COS(RADIANS(latitude)) * POWER(SIN((RADIANS(longitude) - RADIANS(%s)) / 2), 2))) AS distance
+            FROM laundry
+            ORDER BY distance
+            LIMIT 5
+        """
+        cursor.execute(nearby_query, (latitude, latitude, longitude))
+        nearby_data = cursor.fetchall()
+        cursor.close()
+
+        if not nearby_data:
+            return jsonify({'error': 'No nearby laundries found'})
+
+        # Construct the response for the top 5 nearest laundries
+        nearest_laundries = []
+        for laundry in nearby_data:
+            nearest_laundry = {
+                'id': laundry[0],
+                'name': laundry[1],
+                'latitude': laundry[2],
+                'longitude': laundry[3],
+            }
+            nearest_laundries.append(nearest_laundry)
+
+        return jsonify({'nearest_laundries': nearest_laundries})
+
+    except Exception as e:
+        # Debugging: Print any exception that occurs
+        print("Error:", str(e))
+        return jsonify({'error': str(e)})
+
 if __name__ == '__main__':
     import os
     port = int(os.environ.get("PORT", 8080))
